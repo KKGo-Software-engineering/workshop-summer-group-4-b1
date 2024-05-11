@@ -9,6 +9,7 @@ type TransactionRequest struct {
 	TransactionType string    `json:"transaction_type"`
 	Note            string    `json:"note"`
 	ImageUrl        string    `json:"image_url"`
+	SpenderID       int64     `json:"spender_id"`
 }
 
 type TransactionResponse struct {
@@ -19,4 +20,5 @@ type TransactionResponse struct {
 	TransactionType string    `json:"transaction_type"`
 	Note            string    `json:"note"`
 	ImageUrl        string    `json:"image_url"`
+	SpenderID       int64     `json:"spender_id"`
 }
