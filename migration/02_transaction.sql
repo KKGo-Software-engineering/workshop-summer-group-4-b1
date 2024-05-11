@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS "transaction" (
   transaction_type VARCHAR(20) DEFAULT '',
   note VARCHAR(255) DEFAULT '',
   image_url VARCHAR(255) DEFAULT '',
-  spender_id INT REFERENCES spender(id)
+  spender_id INT DEFAULT NULL
 );
 -- +goose StatementEnd
 
