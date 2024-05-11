@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
+	// "github.com/KKGo-Software-engineering/workshop-summer/api/"
 )
 
 type Server struct {
@@ -34,12 +35,13 @@ func New(db *sql.DB, cfg config.Config, logger *zap.Logger) *Server {
 		h := spender.New(cfg.FeatureFlag, db)
 		v1.GET("/spenders", h.GetAll)
 		v1.POST("/spenders", h.Create)
+
 	}
 
-	{
-		h := transaction.New(cfg.FeatureFlag, db)
-		v1.POST("/transactions", h.Create)
-	}
+	h := transaction.New(cfg.FeatureFlag, db)
+	v1.GET("/spenders/:id/transactions", h.GetTransactionById)
+
+	// v1.POST("/transactions", )
 
 	return &Server{e}
 }
