@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
+	// "github.com/KKGo-Software-engineering/workshop-summer/api/"
 )
 
 type Server struct {
@@ -34,6 +35,8 @@ func New(db *sql.DB, cfg config.Config, logger *zap.Logger) *Server {
 		v1.GET("/spenders", h.GetAll)
 		v1.POST("/spenders", h.Create)
 	}
+
+	// v1.POST("/transactions", )
 
 	return &Server{e}
 }
