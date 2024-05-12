@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -56,7 +57,7 @@ func (h handler) Create(c echo.Context) error {
 	logger.Info("create successfully", zap.Int64("id", lastInsertId))
 	return c.JSON(http.StatusCreated, TransactionResponse{
 		ID:              lastInsertId,
-		Date:            tranReq.Date,
+		Date:            &tranReq.Date,
 		Amount:          tranReq.Amount,
 		Category:        tranReq.Category,
 		TransactionType: tranReq.TransactionType,
@@ -108,6 +109,9 @@ func (h *handler) GetTransactionById(c echo.Context) error {
 	// Retrieve spenderID as a string and convert to integer
 	spenderIDStr := c.Param("id")
 	spenderID, err := strconv.Atoi(spenderIDStr)
+	ctx := c.Request().Context()
+
+	// fmt.Print("id is ", spenderIDStr)
 	if err != nil {
 		// Return an error if conversion fails
 		c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid spender ID"})
@@ -117,7 +121,7 @@ func (h *handler) GetTransactionById(c echo.Context) error {
 	var transactions []TransactionResponse
 
 	// Use the integer spenderID in the SQL query
-	rows, err := h.db.Query(`
+	rows, err := h.db.QueryContext(ctx, `
         SELECT id, date, amount, category, transaction_type, note, image_url
         FROM transaction
         WHERE spender_id = $1`, spenderID)
@@ -126,12 +130,15 @@ func (h *handler) GetTransactionById(c echo.Context) error {
 		return err
 	}
 	defer rows.Close()
+	fmt.Println("Transsation ", rows)
 
 	for rows.Next() {
 		var t TransactionResponse
 		if err := rows.Scan(&t.ID, &t.Date, &t.Amount, &t.Category, &t.TransactionType, &t.Note, &t.ImageUrl); err != nil {
 			c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error scanning database results"})
+			fmt.Println("print t ", t)
 			return err
+
 		}
 		transactions = append(transactions, t)
 	}
@@ -175,7 +182,7 @@ func (h handler) Update(c echo.Context) error {
 	logger.Info("update successfully", zap.Int64("id", lastInsertId))
 	return c.JSON(http.StatusOK, TransactionResponse{
 		ID:              lastInsertId,
-		Date:            tranReq.Date,
+		Date:            &tranReq.Date,
 		Amount:          tranReq.Amount,
 		Category:        tranReq.Category,
 		TransactionType: tranReq.TransactionType,

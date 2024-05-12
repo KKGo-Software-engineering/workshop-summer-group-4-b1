@@ -97,7 +97,7 @@ func TestCreateTransaction(t *testing.T) {
 		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&got))
 		assert.Equal(t, TransactionResponse{
 			ID:              1,
-			Date:            tr.Date,
+			Date:            &tr.Date,
 			Amount:          tr.Amount,
 			Category:        tr.Category,
 			TransactionType: tr.TransactionType,
@@ -265,7 +265,7 @@ func TestUpdateTransaction(t *testing.T) {
 		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&got))
 		assert.Equal(t, TransactionResponse{
 			ID:              1,
-			Date:            tr.Date,
+			Date:            &tr.Date,
 			Amount:          tr.Amount,
 			Category:        tr.Category,
 			TransactionType: tr.TransactionType,
