@@ -1,6 +1,8 @@
 package transaction
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +26,7 @@ func TestCreateTransaction(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		cfg := config.FeatureFlag{EnableCreateSpender: true}
+		cfg := config.FeatureFlag{EnableCreateTransaction: true}
 
 		h := New(cfg, nil)
 		err := h.Create(c)
@@ -34,7 +36,7 @@ func TestCreateTransaction(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "Invalid transaction request")
 	})
 
-	t.Run("create transaction success when request body", func(t *testing.T) {
+	t.Run("create transaction success when feature toggle is enable", func(t *testing.T) {
 		e := echo.New()
 		defer e.Close()
 
@@ -44,30 +46,233 @@ func TestCreateTransaction(t *testing.T) {
 			"category": "Food",
 			"transaction_type": "expense",
 			"note": "Lunch",
-			"image_url": "https://example.com/image1.jpg"
+			"image_url": "https://example.com/image1.jpg",
+			"spender_id": 1
 		}`)))
 
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		c.SetPath("api/v1/transactions")
-		cfg := config.FeatureFlag{EnableCreateSpender: true}
+
+		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+		if err != nil {
+			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		defer db.Close()
+
+		layout := "2006-01-02T15:04:05.000Z"
+		str := "2024-04-30T09:00:00.000Z"
+		date, err := time.Parse(layout, str)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		tr := TransactionRequest{
+			Date:            date,
+			Amount:          1000,
+			Category:        "Food",
+			TransactionType: "expense",
+			Note:            "Lunch",
+			ImageUrl:        "https://example.com/image1.jpg",
+			SpenderID:       1,
+		}
+
+		row := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		mock.ExpectQuery(cStmt).WithArgs(tr.Date, tr.Amount, tr.Category, tr.TransactionType, tr.Note, tr.ImageUrl, tr.SpenderID).WillReturnRows(row)
+		cfg := config.FeatureFlag{EnableCreateTransaction: true}
+
+		h := New(cfg, db)
+
+		err = h.Create(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, rec.Code)
+
+		var got TransactionResponse
+		err = rec.Result().Body.Close()
+		if err != nil {
+			t.Fatalf("failed to close response body: %v", err)
+		}
+		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&got))
+		assert.Equal(t, TransactionResponse{
+			ID:              1,
+			Date:            tr.Date,
+			Amount:          tr.Amount,
+			Category:        tr.Category,
+			TransactionType: tr.TransactionType,
+			Note:            tr.Note,
+			ImageUrl:        tr.ImageUrl,
+		}, got)
+	})
+	t.Run("create transaction fail when feature toggle is disable", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{
+			"date": "2024-04-30T09:00:00.000Z",
+			"amount": 1000,
+			"category": "Food",
+			"transaction_type": "expense",
+			"note": "Lunch",
+			"image_url": "https://example.com/image1.jpg",
+			"spender_id": 1
+		}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		cfg := config.FeatureFlag{EnableCreateTransaction: false}
 
 		h := New(cfg, nil)
 		err := h.Create(c)
 
 		assert.NoError(t, err)
-		// assert.JSONEq(t, `{
-		// 	"date": "2024-04-30T09:00:00.000Z",
-		// 	"amount": 1000,
-		// 	"category": "Food",
-		// 	"transaction_type": "expense",
-		// 	"note": "Lunch",
-		// 	"image_url": "https://example.com/image1.jpg"
-		// }`, rec.Body.String())
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+	t.Run("create transaction fail when query row error", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{
+			"date": "2024-04-30T09:00:00.000Z",
+			"amount": 1000,
+			"category": "Food",
+			"transaction_type": "expense",
+			"note": "Lunch",
+			"image_url": "https://example.com/image1.jpg",
+			"spender_id": 1
+		}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		cfg := config.FeatureFlag{EnableCreateTransaction: true}
+
+		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+		if err != nil {
+			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		defer db.Close()
+
+		layout := "2006-01-02T15:04:05.000Z"
+		str := "2024-04-30T09:00:00.000Z"
+		date, err := time.Parse(layout, str)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		tr := TransactionRequest{
+			Date:            date,
+			Amount:          1000,
+			Category:        "Food",
+			TransactionType: "expense",
+			Note:            "Lunch",
+			ImageUrl:        "https://example.com/image1.jpg",
+			SpenderID:       1,
+		}
+
+		mock.ExpectQuery(cStmt).WithArgs(tr.Date, tr.Amount, tr.Category, tr.TransactionType, tr.Note, tr.ImageUrl, tr.SpenderID).WillReturnError(fmt.Errorf("query row error"))
+		h := New(cfg, db)
+		err = h.Create(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}
+
+func TestUpdateTransaction(t *testing.T) {
+	t.Run("update transaction fail when bad request body", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(`{ bad request body }`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("api/v1/transactions/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+
+		cfg := config.FeatureFlag{EnableUpdateTransaction: true}
+
+		h := New(cfg, nil)
+		err := h.Update(c)
+
+		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Invalid transaction request")
 	})
 
+	t.Run("update transaction success when feature toggle is enable", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodPut, "/", io.NopCloser(strings.NewReader(`{
+			"date": "2024-04-30T09:00:00.000Z",
+			"amount": 1000,
+			"category": "Food",
+			"transaction_type": "expense",
+			"note": "Lunch",
+			"image_url": "https://example.com/image1.jpg",
+			"spender_id": 1
+		}`)))
+
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("api/v1/transactions/:id")
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+
+		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+		if err != nil {
+			t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		defer db.Close()
+
+		layout := "2006-01-02T15:04:05.000Z"
+		str := "2024-04-30T09:00:00.000Z"
+		date, err := time.Parse(layout, str)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		tr := TransactionRequest{
+			Date:            date,
+			Amount:          1000,
+			Category:        "Food",
+			TransactionType: "expense",
+			Note:            "Lunch",
+			ImageUrl:        "https://example.com/image1.jpg",
+			SpenderID:       1,
+		}
+
+		row := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		mock.ExpectQuery(uStmt).WithArgs(tr.Date, tr.Amount, tr.Category, tr.TransactionType, tr.Note, tr.ImageUrl, tr.SpenderID).WillReturnRows(row)
+		cfg := config.FeatureFlag{EnableUpdateTransaction: true}
+
+		h := New(cfg, db)
+
+		err = h.Update(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var got TransactionResponse
+		err = rec.Result().Body.Close()
+		if err != nil {
+			t.Fatalf("failed to close response body: %v", err)
+		}
+		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&got))
+		assert.Equal(t, TransactionResponse{
+			ID:              1,
+			Date:            tr.Date,
+			Amount:          tr.Amount,
+			Category:        tr.Category,
+			TransactionType: tr.TransactionType,
+			Note:            tr.Note,
+			ImageUrl:        tr.ImageUrl,
+		}, got)
+	})
 }
 
 func TestGetTransactionById(t *testing.T) {

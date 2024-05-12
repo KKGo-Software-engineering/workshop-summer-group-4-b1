@@ -29,7 +29,9 @@ type Database struct {
 }
 
 type FeatureFlag struct {
-	EnableCreateSpender bool `env:"ENABLE_CREATE_SPENDER"`
+	EnableCreateSpender     bool `env:"ENABLE_CREATE_SPENDER"`
+	EnableCreateTransaction bool `env:"ENABLE_CREATE_TRANSACTION"`
+	EnableUpdateTransaction bool `env:"ENABLE_UPDATE_TRANSACTION"`
 }
 
 func Env(key string) string {

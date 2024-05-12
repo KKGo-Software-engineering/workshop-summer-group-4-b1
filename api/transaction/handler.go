@@ -6,7 +6,9 @@ import (
 	"strconv"
 
 	"github.com/KKGo-Software-engineering/workshop-summer/api/config"
+	"github.com/KKGo-Software-engineering/workshop-summer/api/mlog"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 type Err struct {
@@ -21,13 +23,46 @@ func New(cfg config.FeatureFlag, db *sql.DB) *handler {
 	return &handler{cfg, db}
 }
 
+const (
+	cStmt = `INSERT INTO transaction (date, amount, category, transaction_type, note, image_url, spender_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;`
+	uStmt = `UPDATE transaction SET date = $1, amount = $2, category = $3, transaction_type = $4, note = $5, image_url = $6, spender_id = $7 WHERE id = $8 RETURNING id;`
+)
+
 func (h handler) Create(c echo.Context) error {
+	if !h.flag.EnableCreateTransaction {
+		return c.JSON(http.StatusForbidden, "create new transaction feature is disabled")
+	}
+
+	logger := mlog.L(c)
+	ctx := c.Request().Context()
+
 	var tranReq TransactionRequest
-	if err := c.Bind(tranReq); err != nil {
+	if err := c.Bind(&tranReq); err != nil {
 		return c.JSON(http.StatusBadRequest, Err{Message: "Invalid transaction request"})
 	}
 
-	return c.JSON(http.StatusOK, "OK")
+	var lastInsertId int64
+	err := h.db.QueryRowContext(
+		ctx,
+		cStmt,
+		tranReq.Date, tranReq.Amount, tranReq.Category, tranReq.TransactionType, tranReq.Note, tranReq.ImageUrl, tranReq.SpenderID,
+	).Scan(&lastInsertId)
+
+	if err != nil {
+		logger.Error("query row error", zap.Error(err))
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	logger.Info("create successfully", zap.Int64("id", lastInsertId))
+	return c.JSON(http.StatusCreated, TransactionResponse{
+		ID:              lastInsertId,
+		Date:            tranReq.Date,
+		Amount:          tranReq.Amount,
+		Category:        tranReq.Category,
+		TransactionType: tranReq.TransactionType,
+		Note:            tranReq.Note,
+		ImageUrl:        tranReq.ImageUrl,
+	})
 }
 
 func GetAll() {
@@ -76,4 +111,44 @@ func (h *handler) GetTransactionById(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"transactions": transactions})
+}
+
+func (h handler) Update(c echo.Context) error {
+	if !h.flag.EnableUpdateTransaction {
+		return c.JSON(http.StatusForbidden, "update transaction feature is disabled")
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if id == 0 {
+		return c.JSON(http.StatusBadRequest, Err{Message: "ID is required"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, Err{Message: "Invalid ID"})
+	}
+
+	logger := mlog.L(c)
+	ctx := c.Request().Context()
+
+	var tranReq TransactionRequest
+	if err := c.Bind(&tranReq); err != nil {
+		return c.JSON(http.StatusBadRequest, Err{Message: "Invalid transaction request"})
+	}
+	var lastInsertId int64
+	err = h.db.QueryRowContext(ctx, uStmt,
+		tranReq.Date, tranReq.Amount, tranReq.Category, tranReq.TransactionType, tranReq.Note, tranReq.ImageUrl, tranReq.SpenderID,
+	).Scan(&lastInsertId)
+	if err != nil {
+		logger.Error("query row error", zap.Error(err))
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	logger.Info("update successfully", zap.Int64("id", lastInsertId))
+	return c.JSON(http.StatusOK, TransactionResponse{
+		ID:              lastInsertId,
+		Date:            tranReq.Date,
+		Amount:          tranReq.Amount,
+		Category:        tranReq.Category,
+		TransactionType: tranReq.TransactionType,
+		Note:            tranReq.Note,
+		ImageUrl:        tranReq.ImageUrl,
+	})
 }
