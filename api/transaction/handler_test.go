@@ -327,3 +327,52 @@ func TestGetTransactionById(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), "Database error")
 	})
 }
+func TestGetAllTransaction(t *testing.T) {
+	t.Run("get all transaction succesfully", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		db, mock, _ := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+		defer db.Close()
+
+		// Convert string to time.Time
+		date1, _ := time.Parse(time.RFC3339, "2024-04-30T09:00:00Z")
+		date2, _ := time.Parse(time.RFC3339, "2024-04-29T19:00:00Z")
+
+		rows := sqlmock.NewRows([]string{"id", "date", "amount", "category", "transaction_type", "note", "image_url"}).
+			AddRow(1, date1, 1000.00, "Food", "expense", "Lunch", "https://example.com/image1.jpg").
+			AddRow(2, date2, 2000.00, "Transport", "income", "Salary", "https://example.com/image2.jpg")
+		mock.ExpectQuery(`SELECT id, date, amount, category, transaction_type, note, image_url FROM transaction`).WillReturnRows(rows)
+
+		h := New(config.FeatureFlag{}, db)
+		err := h.GetAll(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"transactions":[{"id":1,"date":"2024-04-30T09:00:00Z","amount":1000.00,"category":"Food","transaction_type":"expense","note":"Lunch","image_url":"https://example.com/image1.jpg"},{"id":2,"date":"2024-04-29T19:00:00Z","amount":2000.00,"category":"Transport","transaction_type":"income","note":"Salary","image_url":"https://example.com/image2.jpg"}]}`, rec.Body.String())
+	})
+
+	t.Run("get all transaction failed on database", func(t *testing.T) {
+		e := echo.New()
+		defer e.Close()
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		db, mock, _ := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+		defer db.Close()
+
+		mock.ExpectQuery(`SELECT id, date, amount, category, transaction_type, note, image_url FROM transaction`).WillReturnError(assert.AnError)
+
+		h := New(config.FeatureFlag{}, db)
+		err := h.GetAll(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+}

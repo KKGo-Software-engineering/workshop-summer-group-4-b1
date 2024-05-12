@@ -65,8 +65,39 @@ func (h handler) Create(c echo.Context) error {
 	})
 }
 
-func GetAll() {
+func (h handler) GetAll(c echo.Context) error {
+	logger := mlog.L(c)
+	ctx := c.Request().Context()
 
+	// page, err := strconv.Atoi(c.URL.Query().Get("page"))
+	// if err != nil || page < 0 {
+	// 	page = 0 // Default to the first page if page parameter is invalid
+	// }
+
+	// pageSize, err := strconv.Atoi(c.URL.Query().Get("pageSize"))
+	// if err != nil || pageSize <= 0 {
+	// 	pageSize = 10 // Default page size
+	// }
+
+	rows, err := h.db.QueryContext(ctx, `SELECT id, date, amount, category, transaction_type, note, image_url FROM transaction`)
+	if err != nil {
+		logger.Error("query error", zap.Error(err))
+		return c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	defer rows.Close()
+
+	var tRs []TransactionResponse
+	for rows.Next() {
+		var tR TransactionResponse
+		err := rows.Scan(&tR.ID, &tR.Date, &tR.Amount, &tR.Category, &tR.TransactionType, &tR.Note, &tR.ImageUrl)
+		if err != nil {
+			logger.Error("scan error", zap.Error(err))
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
+		tRs = append(tRs, tR)
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"transactions": tRs})
 }
 
 func GetByExpenseId() {
