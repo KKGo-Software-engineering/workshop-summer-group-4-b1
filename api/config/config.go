@@ -86,7 +86,9 @@ func parse(envPrefix string) (Config, error) {
 			Port: port,
 		},
 		FeatureFlag: FeatureFlag{
-			EnableCreateSpender: feats.EnableCreateSpender,
+			EnableCreateSpender:     feats.EnableCreateSpender,
+			EnableCreateTransaction: feats.EnableCreateTransaction,
+			EnableUpdateTransaction: feats.EnableUpdateTransaction,
 		},
 	}, nil
 }
