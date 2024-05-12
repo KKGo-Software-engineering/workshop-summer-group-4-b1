@@ -5,4 +5,6 @@ metadata:
     namespace: group-4-b1-prod
 data:
     server.port: "8080"
-    enable.create.spender: "false"
+    enable.create.spender: "true"
+    enable.create.transaction: "true"
+    enable.update.transaction: "true"

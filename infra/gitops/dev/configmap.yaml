@@ -6,3 +6,5 @@ metadata:
 data:
     server.port: "8080"
     enable.create.spender: "true"
+    enable.create.transaction: "true"
+    enable.update.transaction: "true"

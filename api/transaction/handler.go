@@ -42,6 +42,9 @@ func (h handler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, Err{Message: "Invalid transaction request"})
 	}
 
+	//validate spender id from spender table
+
+	//create transaction
 	var lastInsertId int64
 	err := h.db.QueryRowContext(
 		ctx,
